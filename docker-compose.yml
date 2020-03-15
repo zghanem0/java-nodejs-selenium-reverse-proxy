@@ -1,0 +1,84 @@
+version: "3"
+services:
+  java-app:     
+    image: java-app1 
+    ports:
+      - "8080:8080"  
+    container_name: Java-app
+  node-js-1:
+    build: ./Nodejs-express-testapp-1
+    ports:
+      - "7777:7777"
+    container_name: project_node_js-1
+  
+  node-js-2:
+    build: ./Nodejs-express-testapp-2
+    ports:
+       - "8888:8888"
+    container_name: project_node_js-2
+
+  nginx:
+    image: reverse-proxy
+    ports:
+      - "80:80"
+    container_name: project_reverse-proxy
+
+  selenium-hub:
+    image: selenium/hub
+    container_name: selenium-hub
+    ports:
+      - "4444:4444"
+
+  chrome:
+    image: selenium/node-chrome-debug
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_PORT_4444_TCP_ADDR=selenium-hub
+      - HUB_PORT_4444_TCP_PORT=4444
+    container_name: selenium-chrome
+    volumes:
+      - /dev/shm:/dev/shm
+    ports:
+      - "5901:5900"
+  firefox:
+    image: selenium/node-firefox-debug
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_PORT_4444_TCP_ADDR=selenium-hub
+      - HUB_PORT_4444_TCP_PORT=4444
+    container_name: selenium-firefox
+    volumes:
+      - /dev/shm:/dev/shm
+    ports:
+      - "5900:5900"
+
+  maven:
+    image: maven
+    restart: always
+    environment:
+      - HUB_URL=http://selenium-hub:4444
+      - TEST_URL=http://project_node_js-1:7777
+      - TEST_URL=http://project_node_js-2:8888
+    volumes:
+      - ./qa-test:/usr/src
+      - ./qa-test/target/surefire-reports:/usr/src/target/surefire-reports/:rw
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /usr/src/target/surefire-reports/index.html ]"]
+      interval: 3s
+      retries: 6
+    container_name : maven
+    working_dir: /usr/src
+    command : mvn clean test
+
+  selenium-report:
+    container_name: selenium-report
+    image: httpd:2.4
+    restart: always
+    ports:
+      - "9999:80"
+    depends_on:
+      - maven
+    volumes:
+      - ./qa-test/target/surefire-reports:/usr/local/apache2/htdocs:rw
